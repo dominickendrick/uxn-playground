@@ -1,0 +1,497 @@
+( running thing )
+( released under unlicense.org )
+
+( coding convention: roughly follows the standard forth and uxn conventions
+  but uses the Captal Letters to express short values )
+
+( we use special representations to express y-axis values )
+( player: 4-bit fixed point numbers )
+( wall: sprite row numbers [divided by 8] )
+
+( macros )
+
+( note: - = ! cannot start a macro name, they are reserved runes,
+  so use the SUB/EQU/NEQ opcodes directly instead )
+
+%+ { ADD } 
+%* { MUL } 
+%/ { DIV }
+%< { LTH } 
+%> { GTH } 
+
+%++ { ADD2 } 
+%** { MUL2 } 
+%// { DIV2 }
+%<< { LTH2 } 
+%>> { GTH2 } 
+
+%NOT { #00 EQU }
+%DEC { #01 SUB } %DEC2 { #0001 SUB2 }
+
+%2* { #10 SFT } %4* { #20 SFT } %8* { #30 SFT }
+%2/ { #01 SFT } %4/ { #02 SFT } %8/ { #03 SFT }
+
+%2** { #10 SFT2 } %4** { #20 SFT2 } %8** { #30 SFT2 }
+%2// { #01 SFT2 } %4// { #02 SFT2 } %8// { #03 SFT2 }
+
+%RTN { JMP2r }
+
+( devices )
+
+|00 @system     [ &Vector $2 &pad    $6 &R      $2 &G     $2 &B      $2 ]
+|20 @screen     [ &Vector $2 &Width  $2 &Height $2 &auto  $1 &pad    $1
+                  &X      $2 &Y      $2 &Addr   $2 &pixel $1 &sprite $1 ]
+|80 @controller [ &Vector $2 &button $1 &key    $1 ]
+
+( constants )
+
+%Gravity      { #0004 }
+%Thrust       { #0030 }
+%Start-y      { #0800 }
+%Cloud-speed  { #0002 }
+%Ground-speed { #0006 }
+
+( variables )
+
+|0000
+
+@player [ &X $2 &Y $2 &V $2 ]
+@cloud  [ &x0 $2 &x1 $2 &x2 $2 ]
+@cactus [ &x0 $2 &x1 $2 ]
+@state  $1                     ( 0 = title, 1 = playing )
+@armed  $1                     ( button released since entering title )
+
+( program )
+
+|0100 ( -> )
+
+    ( theme )
+    #843f .system/R DEO2
+    #ca3f .system/G DEO2
+    #f43f .system/B DEO2
+
+    ( random seed )
+    #a5c3 ;rand/x STA2
+
+    ( vector )
+    ;step-game .screen/Vector DEO2
+
+    ( begin on the title screen )
+    #00 .state STZ
+    #00 .armed STZ
+
+BRK
+
+@reset-game ( -> )
+
+    ;clear-screen JSR2
+
+    ( player: a quarter from the left, standing on the ground )
+    .screen/Width DEI2 4// .player/X STZ2
+    .screen/Height DEI2 #0030 SUB2 #40 SFT2 .player/Y STZ2
+    #0080 .player/V STZ2
+
+    ( scenery )
+    ;init-clouds JSR2
+    ;init-cacti JSR2
+
+RTN
+
+@step-game ( -> )
+
+    ( fresh sky each frame )
+    ;clear-screen JSR2
+
+    ( title screen until the game is started )
+    .state LDZ ,&play JCN
+        ;title-screen JSR2
+        BRK
+    &play
+
+    ( scrolling background )
+    ;update-clouds JSR2
+    ;draw-clouds JSR2
+
+    ( ground )
+    ;draw-floor JSR2
+
+    ( obstacles )
+    ;update-cacti JSR2
+    ;draw-cacti JSR2
+
+    ( player )
+    ;update-player JSR2
+    #4a ;draw-player JSR2
+
+    ( crash -> back to title )
+    ;check-collisions JSR2 ,&crash JCN
+
+BRK
+
+    &crash
+    #00 .state STZ
+    #00 .armed STZ
+
+BRK
+
+( clouds )
+
+@init-clouds ( -- )
+    #0010 .cloud/x0 STZ2
+    #0080 .cloud/x1 STZ2
+    #00e0 .cloud/x2 STZ2
+RTN
+
+@update-clouds ( -- )
+    .cloud/x0 ;scroll-cloud JSR2
+    .cloud/x1 ;scroll-cloud JSR2
+    .cloud/x2 ;scroll-cloud JSR2
+RTN
+
+@scroll-cloud ( addr -- )
+
+    ( x -= Cloud-speed )
+    DUP LDZ2 Cloud-speed SUB2
+
+    ( once fully off the left edge, wrap back to the right )
+    DUP2 #8000 << ,&keep JCN
+        POP2 .screen/Width DEI2
+    &keep
+
+    ROT STZ2
+
+RTN
+
+@draw-clouds ( -- )
+    .cloud/x0 LDZ2 #0020 ;draw-cloud JSR2
+    .cloud/x1 LDZ2 #0050 ;draw-cloud JSR2
+    .cloud/x2 LDZ2 #0038 ;draw-cloud JSR2
+RTN
+
+@draw-cloud ( x* y* -- )
+    .screen/Y DEO2
+    .screen/X DEO2
+    ;&sprite .screen/Addr DEO2
+    #05 .screen/auto DEO            ( auto x + addr )
+    #03 .screen/sprite DEOk DEO     ( two tiles wide, colour 3 )
+RTN
+
+    &sprite
+    001c 3e7f ffff 7e00
+    0038 7cfe ffff 7c00
+
+( ground )
+
+@draw-floor ( -- )
+
+    ( grass surface: Y = Height - 16 )
+    #0000 .screen/X DEO2
+    .screen/Height DEI2 #0010 SUB2 .screen/Y DEO2
+    ;&grass .screen/Addr DEO2
+    ;draw-row JSR2
+
+    ( dirt: Y = Height - 8 )
+    #0000 .screen/X DEO2
+    .screen/Height DEI2 #0008 SUB2 .screen/Y DEO2
+    ;&dirt .screen/Addr DEO2
+    ;draw-row JSR2
+
+RTN
+
+    &grass ffff aa55 2010 0804
+    &dirt  4281 24c3 4281 24c3
+
+@draw-row ( -- )
+
+    ( repeat the current tile across the whole width )
+    #01 .screen/auto DEO
+    .screen/Width DEI2 8// NIP
+
+    &loop
+        #01 .screen/sprite DEO
+        DEC DUP ,&loop JCN
+    POP
+
+RTN
+
+( cactus )
+
+@init-cacti ( -- )
+    .screen/Width DEI2 #0040 ++ .cactus/x0 STZ2
+    .screen/Width DEI2 #0120 ++ .cactus/x1 STZ2
+RTN
+
+@update-cacti ( -- )
+    .cactus/x0 ;scroll-cactus JSR2
+    .cactus/x1 ;scroll-cactus JSR2
+RTN
+
+@scroll-cactus ( addr -- )
+
+    ( x -= Ground-speed )
+    DUP LDZ2 Ground-speed SUB2
+
+    ( respawn once fully off the left edge )
+    DUP2 #0010 ++ #8000 << ,&keep JCN
+        POP2 ;respawn-x JSR2
+    &keep
+
+    ROT STZ2
+
+RTN
+
+@respawn-x ( -- x* )
+    ( to the right of the screen edge and any pending cactus, plus a gap )
+    .screen/Width DEI2
+    .cactus/x0 LDZ2 ;widen JSR2
+    .cactus/x1 LDZ2 ;widen JSR2
+    ;rand JSR2 #007f AND2 #0040 ++ ++
+RTN
+
+@widen ( base* x* -- base* )
+    ( ignore cacti that have wrapped off the left edge )
+    DUP2 #8000 >> ,&skip JCN
+        ;max2 JSR2 RTN
+    &skip
+        POP2
+RTN
+
+@max2 ( a* b* -- max* )
+    OVR2 OVR2 << ,&pickb JCN
+        POP2 RTN
+    &pickb
+    NIP2
+RTN
+
+@draw-cacti ( -- )
+    .cactus/x0 LDZ2 ;draw-cactus JSR2
+    .cactus/x1 LDZ2 ;draw-cactus JSR2
+RTN
+
+@draw-cactus ( x* -- )
+
+    ;&sprite .screen/Addr DEO2
+    #35 .screen/auto DEO            ( 4 tiles tall, one column per DEO )
+
+    .screen/Height DEI2 #0030 SUB2  ( top = Height - 48 )
+
+    ( left column )
+    OVR2 .screen/X DEO2
+    DUP2 .screen/Y DEO2
+    #45 .screen/sprite DEO
+
+    ( right column )
+    SWP2 #0008 ++ .screen/X DEO2
+    .screen/Y DEO2
+    #45 .screen/sprite DEO
+
+RTN
+
+    &sprite
+    ( left column, cols 0-7 )
+    0103 0303 0303 0303
+    0303 0303 0303 3333
+    3333 3333 3f3f 0303
+    0303 0303 0303 0303
+    ( right column, cols 8-15 )
+    80c0 c0c0 c0c0 cccc
+    cccc cccc fcfc c0c0
+    c0c0 c0c0 c0c0 c0c0
+    c0c0 c0c0 c0c0 c0c0
+
+( collision )
+
+@check-collisions ( -- hit )
+    .cactus/x0 LDZ2 ;check-hit JSR2
+    .cactus/x1 LDZ2 ;check-hit JSR2
+    ORA
+RTN
+
+@check-hit ( cactus-x* -- hit )
+
+    ( horizontal overlap: cactus within the dino's 24px body )
+    .player/X LDZ2 SUB2 #0010 ++ #0028 << ,&xhit JCN
+        #00 RTN
+    &xhit
+
+    ( grounded: player bottom below the cactus top )
+    .player/Y LDZ2 #04 SFT2 #0020 ++
+    .screen/Height DEI2 #0030 SUB2
+    >>
+
+RTN
+
+( player )
+
+@update-player ( -- )
+
+    ( reset V on up-key press )
+    ;get-up-key JSR2 NOT ,&no-up JCN
+        Thrust .player/V STZ2
+    &no-up
+
+    ( V += Gravity )
+    .player/V LDZ2 Gravity ++ .player/V STZ2
+
+    ( Y += V - 0080 )
+    .player/Y LDZ2 .player/V LDZ2 ++ #0080 SUB2 .player/Y STZ2
+
+    ( land on the floor: clamp Y to [Height - 48] << 4 )
+    .player/Y LDZ2
+    .screen/Height DEI2 #0030 SUB2 #40 SFT2
+    GTH2k ,&land JCN
+        POP2 POP2 RTN
+    &land
+        NIP2 .player/Y STZ2
+        #0080 .player/V STZ2
+
+RTN
+
+@draw-player ( color -- )
+
+    STH ( use return stack to store colour )
+
+    ;&sprite .screen/Addr DEO2
+    #35 .screen/auto DEO            ( 4 tiles tall, one column per DEO )
+
+    ( pixel Y of the top-left corner )
+    .player/Y LDZ2 #04 SFT2
+
+    ( column 0 )
+    .player/X LDZ2 .screen/X DEO2
+    DUP2 .screen/Y DEO2
+    STHrk .screen/sprite DEO
+
+    ( column 1 )
+    .player/X LDZ2 #0008 ++ .screen/X DEO2
+    DUP2 .screen/Y DEO2
+    STHrk .screen/sprite DEO
+
+    ( column 2 )
+    .player/X LDZ2 #0010 ++ .screen/X DEO2
+    .screen/Y DEO2
+    STHr .screen/sprite DEO
+
+RTN
+    &sprite
+    ( dinosaur - left column, cols 0-7 )
+    0000 0000 0000 0000
+    0107 1f7f ffff 0f01
+    0000 0000 0000 0000
+    0000 0000 0000 0000
+    ( dinosaur - middle column, cols 8-15 )
+    0001 0303 0303 033f
+    ffff ffff ffff ffff
+    3f3f 3f3f 3f3f 1f1f
+    1c1c 1c1c 1c1c 1e1e
+    ( dinosaur - right column, cols 16-23 )
+    fcfe ffdf ffff fefc
+    fcfc fcfc fcfc fcfc
+    fcfc f8f8 f8f8 f8f8
+    e0e0 e0e0 e0e0 f0f0
+
+( misc )
+
+@clear-screen ( -- )
+
+    ( wipe both layers to colour 0 from the top-left corner )
+    #0000 .screen/X DEO2
+    #0000 .screen/Y DEO2
+    #80 .screen/pixel DEO   ( background )
+    #c0 .screen/pixel DEO   ( foreground )
+
+RTN
+
+@get-up-key ( -- up )
+
+    .controller/button DEI #04 SFT #01 AND
+
+RTN
+
+@rand ( -- num* )
+
+    ( 16-bit xorshift )
+    ,&x LDR2
+    DUP2 #70 SFT2 EOR2
+    DUP2 #09 SFT2 EOR2
+    DUP2 #80 SFT2 EOR2
+    DUP2 ,&x STR2
+
+RTN
+
+    &x $2
+
+( title )
+
+@title-screen ( -> )
+
+    ( centred title and prompt )
+    ;text-title  .screen/Width DEI2 #0040 SUB2 #01 SFT2 #0088 #42 ;draw-str JSR2
+    ;text-prompt .screen/Width DEI2 #00b0 SUB2 #01 SFT2 #00a8 #42 ;draw-str JSR2
+
+    ( start on a fresh button press [released, then pressed] )
+    .controller/button DEI
+    NOT ,&arm JCN
+        .armed LDZ ,&start JCN
+        RTN
+    &arm
+        #01 .armed STZ
+        RTN
+    &start
+        ;reset-game JSR2
+        #01 .state STZ
+
+RTN
+
+@draw-str ( text* x* y* color -- )
+
+    ,&color STR
+    .screen/Y DEO2
+    .screen/X DEO2
+    #01 .screen/auto DEO
+
+    &loop
+        LDAk #20 SUB #00 SWP #30 SFT2 ;font ++ .screen/Addr DEO2
+        ,&color LDR .screen/sprite DEO
+        INC2 LDAk ,&loop JCN
+    POP2
+
+RTN
+
+    &color $1
+
+@text-title  "DINO 20 "RUN 00
+@text-prompt "PRESS 20 "ANY 20 "KEY 20 "TO 20 "START 00
+
+( atari8.uf1 font, indexed from 0x20 )
+@font
+    0000 0000 0000 0000  6060 6060 6000 6000
+    6666 6600 0000 0000  006c fe6c 6cfe 6c00
+    183e 603c 067c 1800  0066 6c18 3066 4600
+    386c 3870 decc 7600  6060 6000 0000 0000
+    0e1c 1818 181c 0e00  7038 1818 1838 7000
+    0066 3cff 3c66 0000  0018 187e 1818 0000
+    0000 0000 0030 3060  0000 007e 0000 0000
+    0000 0000 0018 1800  0206 0c18 3060 4000
+    3c66 6e76 6666 3c00  1838 1818 1818 7e00
+    3c66 060c 1830 7e00  7e0c 180c 0666 3c00
+    0c1c 3c6c 7e0c 0c00  7e60 7c06 0666 3c00
+    3c60 607c 6666 3c00  7e06 0c18 3030 3000
+    3c66 663c 6666 3c00  3c66 663e 060c 3800
+    0060 6000 6060 0000  0030 3000 3030 6000
+    0c18 3060 3018 0c00  0000 7e00 007e 0000
+    6030 180c 1830 6000  3c66 060c 1800 1800
+    3c66 6e6a 6e60 3e00  183c 6666 7e66 6600
+    7c66 667c 6666 7c00  3c66 6060 6066 3c00
+    786c 6666 666c 7800  7e60 607c 6060 7e00
+    7e60 607c 6060 6000  3e60 606e 6666 3e00
+    6666 667e 6666 6600  7830 3030 3030 7800
+    0606 0606 0666 3c00  666c 7870 786c 6600
+    6060 6060 6060 7e00  c6ee fed6 c6c6 c600
+    6676 7e7e 6e66 6600  3c66 6666 6666 3c00
+    7c66 667c 6060 6000  3c66 6666 766c 3600
+    7c66 667c 6c66 6600  3c66 603c 0666 3c00
+    7e18 1818 1818 1800  6666 6666 6666 3e00
+    6666 6666 663c 1800  c6c6 c6d6 feee c600
+    6666 3c18 3c66 6600  6666 663c 1818 1800
+    7e06 0c18 3060 7e00  7860 6060 6060 7800
