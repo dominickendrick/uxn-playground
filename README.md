@@ -48,8 +48,10 @@ Controls: move the **mouse** over a headline to highlight it in grey.
 
 ### flappy.tal
 
+<img width="511" height="350" alt="flappy" src="https://github.com/user-attachments/assets/fb119b76-b03c-4354-a51e-3825570f79bc" />
+
 <!-- Add a screenshot below, e.g. ![flappy](docs/flappy.png) -->
 
 ### guardian.tal
-
+<img width="514" height="303" alt="Screenshot 2026-08-24 at 16 52 49" src="https://github.com/user-attachments/assets/63dd65a6-8635-455b-9205-f4fdeb51b707" />
 <!-- Add a screenshot below, e.g. ![guardian](docs/guardian.png) -->
