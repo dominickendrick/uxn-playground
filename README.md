@@ -2,7 +2,7 @@
 
 A couple of small [Varvara](https://wiki.xxiivv.com/site/varvara.html) programs written in [uxntal](https://wiki.xxiivv.com/site/uxntal.html):
 
-- **[flappy.tal](flappy.tal)** — a small side-scrolling "running dino" style game.
+- **[flappy.tal](flappy.tal)** — a small side-scrolling "running dino" style game. Based on [keijiro/uxn-sketches/flappy.tal](https://github.com/keijiro/uxn-sketches/blob/main/flappy.tal).
 - **[guardian.tal](guardian.tal)** — an intro splash + clickable news headline viewer (a work-in-progress text viewer).
 
 Both are assembled and run with the emulator and assembler bundled in [uxn2/](uxn2/).
