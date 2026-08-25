@@ -5,12 +5,12 @@ A couple of small [Varvara](https://wiki.xxiivv.com/site/varvara.html) programs 
 - **[flappy.tal](flappy.tal)** — a small side-scrolling "running dino" style game. Based on [keijiro/uxn-sketches/flappy.tal](https://github.com/keijiro/uxn-sketches/blob/main/flappy.tal).
 - **[guardian.tal](guardian.tal)** — an intro splash + clickable news headline viewer (a work-in-progress text viewer).
 
-Both are assembled and run with the emulator and assembler bundled in [uxn2/](uxn2/).
+Both are assembled and run with the [uxn2](https://git.sr.ht/~rabbits/uxn2) emulator, which also ships the `drifblim.rom` assembler.
 
 ## Requirements
 
-- The prebuilt `uxn2` emulator and `drifblim.rom` assembler are included in [uxn2/bin/](uxn2/bin/).
-- If you need to rebuild the emulator, you'll need [SDL2](https://www.libsdl.org/) — see [uxn2/README.md](uxn2/README.md).
+- The [uxn2](https://git.sr.ht/~rabbits/uxn2) emulator and its `drifblim.rom` assembler. See the [installation instructions](https://git.sr.ht/~rabbits/uxn2#building) for building from source (you'll need [SDL2](https://www.libsdl.org/)) or grabbing a prebuilt binary.
+- The commands below assume `uxn2` is on your `PATH` and `drifblim.rom` is in the current directory. Adjust the paths to match wherever you installed them.
 
 ## Running
 
@@ -19,16 +19,16 @@ Each program is assembled from its `.tal` source into a `.rom`, then run with th
 The assembler is itself a rom, so assembling looks like:
 
 ```sh
-uxn2/bin/uxn2 uxn2/bin/drifblim.rom <source>.tal <output>.rom
+uxn2 drifblim.rom <source>.tal <output>.rom
 ```
 
 ### flappy.tal
 
 ```sh
 # assemble
-uxn2/bin/uxn2 uxn2/bin/drifblim.rom flappy.tal flappy.rom
+uxn2 drifblim.rom flappy.tal flappy.rom
 # run
-uxn2/bin/uxn2 flappy.rom
+uxn2 flappy.rom
 ```
 
 Controls: press the **up** key (controller button) to flap/jump. Crashing restarts the game.
@@ -37,9 +37,9 @@ Controls: press the **up** key (controller button) to flap/jump. Crashing restar
 
 ```sh
 # assemble
-uxn2/bin/uxn2 uxn2/bin/drifblim.rom guardian.tal guardian.rom
+uxn2 drifblim.rom guardian.tal guardian.rom
 # run
-uxn2/bin/uxn2 guardian.rom
+uxn2 guardian.rom
 ```
 
 Controls: move the **mouse** over a headline to highlight it in grey.
